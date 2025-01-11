@@ -27,7 +27,7 @@ Solaar can be used as a GUI application, the usual case, or via its command-line
 The Solaar GUI is meant to run continuously in the background,
 monitoring devices, making changes to them, and responding to some messages they emit.
 To this end, it is useful to have Solaar start at user login so that
-changes made to devices by Solaar are applied at login and through out the user's session.
+changes made to devices by Solaar are applied at login and throughout the user's session.
 
 Both Solaar interfaces are able to list the connected devices and
 show information about each device, often including battery status.
@@ -75,7 +75,7 @@ Please report such experiences by creating an issue in
 
 Solaar will detect all devices paired with supported Unifying, Bolt, Lightspeed, or Nano
 receivers, and at the very least display some basic information about them.
-Solaar will detect some Logitech devices that connect via a USB cable or Bluetooth.
+Solaar will detect many Logitech devices that connect via a USB cable or Bluetooth.
 
 Solaar can pair and unpair a Logitech device showing the Unifying logo
 (Solaar's version of the [logo][logo])
@@ -84,7 +84,7 @@ and pair and unpair a Logitech device showing the Bolt logo
 with any Bolt receiver,
 and
 can pair and unpair Lightspeed devices with Lightspeed receivers for the same model.
-Solaar can pair some Logitech devices with Logitech Nano receivers but not all Logitech
+Solaar can pair some Logitech devices with Logitech Nano receivers, but not all Logitech
 devices can be paired with Nano receivers.
 Logitech devices without a Unifying or Bolt logo
 generally cannot be paired with Unifying or Bolt receivers.
@@ -95,33 +95,36 @@ which is done using the usual Bluetooth mechanisms.
 For a partial list of supported devices
 and their features, see [the devices page](https://pwr-solaar.github.io/Solaar/devices).
 
-[logo]: https://pwr-solaar.github.io/Solaar/assets/solaar.svg
+[logo]: https://pwr-solaar.github.io/Solaar/img/solaar.svg
 
 ## Prebuilt packages
 
 Up-to-date prebuilt packages are available for some Linux distros
 (e.g., Fedora 33+) in their standard repositories.
 If a recent version of Solaar is not
-available from the standard repositories for your distribution you can try
+available from the standard repositories for your distribution, you can try
 one of these packages.
 
-- Arch solaar package in the [community repository][arch]
-- Ubuntu/Kubuntu 16.04+: use the solaar package from [universe repository][universe repository]
-- Ubuntu/Kubuntu stable packages: use the [Solaar stable ppa][ppa2], courtesy of [gogo][ppa4]
-- Ubuntu/Kubuntu git build packages: use the [Solaar git ppa][ppa1], courtesy of [gogo][ppa4]
+- Arch solaar package in the [extra repository][arch]
+- Ubuntu/Kubuntu package in [Solaar stable ppa][ppa2]
+- NixOS Flake package in [Svenum/Solaar-Flake][nix flake]
+
+Solaar is available from some other repositories
+but they may be several versions behind the current version.
+
+- for Ubuntu/Kubuntu 16.04+: the solaar package from [universe repository][universe repository]
 - a [Gentoo package][gentoo], courtesy of Carlos Silva and Tim Harder
 - a [Mageia package][mageia], courtesy of David Geiger
 
-Solaar uses a standard system tray implementation; solaar-gnome3 is no longer required for gnome or unity integration.
+Solaar uses a standard system tray implementation; solaar-gnome3 is no longer required for Gnome or Unity integration.
 
 [ppa4]: https://launchpad.net/~trebelnik-stefina
 [ppa2]: https://launchpad.net/~solaar-unifying/+archive/ubuntu/stable
-[ppa1]: https://launchpad.net/~solaar-unifying/+archive/ubuntu/ppa
-[ppa]: http://launchpad.net/~daniel.pavel/+archive/solaar
-[arch]: https://www.archlinux.org/packages/community/any/solaar/
+[arch]: https://www.archlinux.org/packages/extra/any/solaar/
 [gentoo]: https://packages.gentoo.org/packages/app-misc/solaar
 [mageia]: http://mageia.madb.org/package/show/release/cauldron/application/0/name/solaar
 [universe repository]: http://packages.ubuntu.com/search?keywords=solaar&searchon=names&suite=all&section=all
+[nix flake]: https://github.com/Svenum/Solaar-Flake
 
 ## Manual installation
 
@@ -130,16 +133,38 @@ for the step-by-step procedure for manual installation.
 
 ## Known Issues
 
-- If the Python hid-parser package is not available Solaar will not recognize some devices.
-  Use pip to install hid-parser.
+- Onboard Profiles, when active, can prevent changes to other settings, such as Polling Rate, DPI, and various LED settings. Which settings are affected depends on the device.  To make changes to affected settings, disable Onboard Profiles.  If Onboard Profiles are later enabled the affected settings may change to the value in the profile.
 
-- If some icons appear broken in the application, make sure you've properly
-  configured the Gtk theme and icon theme in your control panel.
+- Solaar version 1.1.12 has a bug resulting in devices remaining in their default configuration after a system resume.  This is fixed in 1.1.13.
 
-- Solaar normally uses icon names for its icons, which in some system tray implementatations
+- Bluez 5.73 does not remove Bluetooth devices when they disconnect.
+  Solaar 1.1.12 processes the DBus disconnection and connection messages from Bluez and does re-initialize devices when they reconnect.
+  The HID++ driver does not re-initialize devices, which causes problems with smooth scrolling.
+  Until the problem is resolved having Scroll Wheel Resolution set to true (and not ignored) may be helpful.
+
+- The Linux HID++ driver modifies the Scroll Wheel Resolution setting to
+  implement smooth scrolling.  If Solaar changes this setting, scrolling
+  can be either very fast or very slow.  To fix this problem
+  click on the icon at the right edge of the setting to set it to
+  "Ignore this setting", which is the default for new devices.
+  The mouse has to be reset (e.g., by turning it off and on again) before this fix will take effect.
+
+- Solaar expects that it has exclusive control over settings that are not ignored.
+  Running other programs that modify these settings, such as logiops,
+  will likely result in unexpected device behavior.
+
+- The driver also sets the scrolling direction to its normal setting when implementing smooth scrolling.
+  This can interfere with the Scroll Wheel Direction setting, requiring flipping this setting back and forth
+  to restore reversed scrolling.
+
+- The driver sends messages to devices that do not conform with the Logitech HID++ specification
+  resulting in responses being sent back that look like other messages.  For some devices this causes
+  Solaar to report incorrect battery levels.
+
+- Solaar normally uses icon names for its icons, which in some system tray implementations
   results in missing or wrong-sized icons.
   The `--tray-icon-size` option forces Solaar to use icon files of appropriate size
-  for tray icons instead, which produces better results in some system tray implementatations.
+  for tray icons instead, which produces better results in some system tray implementations.
   To use icon files close to 32 pixels in size use `--tray-icon-size=32`.
 
 - The icon in the system tray can show up as 'black on black' in dark
@@ -147,34 +172,14 @@ for the step-by-step procedure for manual installation.
   in some system tray implementations. Changing to a different theme may help.
   The `--battery-icons=symbolic` option can be used to force symbolic icons.
 
-- The Linux HID++ driver modifies the setting Scroll Wheel Resolution to
-  implement smooth scrolling.  If Solaar later changes this setting scrolling
-  can be either very fast or very slow.  To fix this problem
-  click on the icon at the right edge of the setting to set it to
-  "Ignore this setting".
-  The mouse has to be reset (e.g., by turning it off and on again) before this fix will take effect.
-
-- The driver also sets the scrolling direction to its normal setting when implementing smooth scrolling.
-  This can interfere with the Scroll Wheel Direction setting, requiring flipping this setting back and forth
-  to restore reversed scrolling.
-
-- The driver sends messages to devices that do not conform with the Logitech HID++ specification
-  resulting in reponses being sent back that look like other messages.  For some devices this causes
-  Solaar to report incorrect battery levels.
-
-- Many gaming mice and keyboards have the ONBOARD PROFILES feature.
-  This feature can override other features, including polling rate and key lighting.
-  To make the Polling Rate and M-Key LEDs settings effective the Onboard Profiles setting has to be disabled.
-  This may have other effects, such as turning off backlighting.
-
 - Solaar will try to use uinput to simulate input from rules under Wayland or if Xtest is not available
   but this needs write permission on /dev/uinput.
   For more information see [the rules page](https://pwr-solaar.github.io/Solaar/rules).
 
-- Diverted keys remain diverted and so do not have their normal behaviour when Solaar terminates
-  or a device disconnects from a host that is running Solaar.  If necessary, their normal behaviour
+- Diverted keys remain diverted and so do not have their normal behavior when Solaar terminates
+  or a device disconnects from a host that is running Solaar.  If necessary, their normal behavior
   can be reestablished by turning the device off and on again.  This is most important to restore
-  the host switching behaviour of a host switch key that was diverted, for example to switch away
+  the host switching behavior of a host switch key that was diverted, for example to switch away
   from a host that crashed or was turned off.
 
 - When a receiver-connected device changes hosts Solaar remembers which diverted keys were down on it.
@@ -182,9 +187,14 @@ for the step-by-step procedure for manual installation.
   realize that the key was newly depressed.  For this reason Solaar rules that can change hosts should
   trigger on key releasing.
 
+## License
+
+This software is distributed under the terms of the
+[GNU Public License, v2](LICENSE.txt), or later.
+
 ## Contributing to Solaar
 
-Conributions to Solaaar are very welcome.
+Contributions to Solaar are very welcome.
 
 Solaar has complete or partial translations of its GUI strings in several languages.
 If you want to update a translation or add a new one see [the translation page](https://pwr-solaar.github.io/Solaar/i18n) for more information.
@@ -194,28 +204,21 @@ If you find a bug, please check first if it has already been reported. If yes, p
 If you want to add a new feature to Solaar, feel free to open a feature request issue to discuss your proposal.
 There are also usually several open issues for enhancements that have already been requested.
 
-
-## License
-
-This software is distributed under the terms of the
-[GNU Public License, v2](COPYING).
-
-## Thanks
+## Contributors
 
 This project began as a third-hand clone of [Noah K. Tilton](https://github.com/noah)'s
 logitech-solar-k750 project on GitHub (no longer available). It was developed
-further thanks to the diggings in Logitech's HID++ protocol done by many other
-people:
+further thanks to the contributions of many other people, including:
 
-- [Julien Danjou](http://julien.danjou.info/blog/2012/logitech-k750-linux-support),
-who also provided some internal
-[Logitech documentation](http://julien.danjou.info/blog/2012/logitech-unifying-upower)
+- [Daniel Pavel](https://github.com/pwr)
+- [Filipe Lains](https://github.com/FFY00)
+- [Peter Wu](https://github.com/Lekensteyn), who also did some [reverse engineering on pairing](https://lekensteyn.nl/logitech-unifying.html)
+- Julien Danjou
 - [Lars-Dominik Braun](http://6xq.net/git/lars/lshidpp.git)
 - [Alexander Hofbauer](http://derhofbauer.at/blog/blog/2012/08/28/logitech-performance-mx)
-- [Clach04](http://bitbucket.org/clach04/logitech-unifying-receiver-tools)
-- [Peter Wu](https://lekensteyn.nl/logitech-unifying.html)
-- [Nestor Lopez Casado](http://drive.google.com/folderview?id=0BxbRzx7vEV7eWmgwazJ3NUFfQ28)
-provided some more Logitech specifications for the HID++ protocol
+- [Clach04](https://github.com/clach04)
+- [Peter F. Patel-Schneider](https://github.com/pfps)
 
-Also, thanks to Douglas Wagner, Julien Gascard, and Peter Wu for helping with
-application testing and supporting new devices.
+Thanks go to Nestor Lopez Casado, who
+provided [public Logitech specifications for the HID++ protocol](http://drive.google.com/folderview?id=0BxbRzx7vEV7eWmgwazJ3NUFfQ28).
+Also, thanks to Douglas Wagner, Julien Gascard, and others for helping with application testing and supporting new devices.

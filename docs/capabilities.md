@@ -51,7 +51,7 @@ connect via a USB cable or via bluetooth can be determined by their USB or
 Bluetooth product ID.
 
 
-# Pairing and Unpairing
+## Pairing and Unpairing
 
 Solaar is able to pair and unpair devices with
 receivers as supported by the device and receiver.
@@ -80,7 +80,7 @@ that they were bought with.
 ## Device Settings
 
 Solaar can display quite a few changeable settings of receivers and devices.
-For a list of HID++ features and their support see [the features page](features).
+For a list of HID++ features and their support see [the features page](features.md).
 
 Solaar does not do much beyond using the HID++ protocol to change the
 behavior of receivers and devices via changing their settings.
@@ -106,11 +106,11 @@ Setting information is stored in the file `~/.config/solaar/config.yaml`.
 
 Updating of a setting can be turned off in the Solaar GUI by clicking on the icon
 at the right-hand edge of the setting until a red icon appears (with tooltip
-"Ignore this setting" ).
+"Ignore this setting").
 
 Solaar keeps track of settings independently on each computer.
 As a result if a device is switched between different computers
-Solaar may apply different settings for it on the different computers
+Solaar may apply different settings for it on the different computers.
 
 Querying a device for its current state can require quite a few HID++
 interactions. These interactions can temporarily slow down the device, so
@@ -140,7 +140,6 @@ change the speed of some thumb wheels.  These notifications are only sent
 for actions that are set in Solaar to their HID++ setting (also known as diverted).
 For more information on this capability of Solaar see
 [the rules page](https://pwr-solaar.github.io/Solaar/rules).
-Some features of rules do not work under Wayland.
 
 Users can edit rules using a GUI by clicking on the `Rule Editor` button in the Solaar main window.
 
@@ -175,6 +174,108 @@ is sent to the Solaar rule system so that rules can detect these notifications.
 For more information on Mouse Gestures rule conditions see
 [the rules page](https://pwr-solaar.github.io/Solaar/rules).
 
+### Keyboard Key Names and Locations
+
+Solaar uses the standard Logitech names for keyboard keys.  Some Logitech keyboards have different icons on some of their keys and have different functionality than suggested by these names.
+
+Solaar is uses the standard US keyboard layout.  This currently only matters for the `Per-key Lighting` setting.  Users who want to have the key names for this setting reflect the keyboard layout that they use can create and edit `~/.config/solaar/keys.yaml` which contains a YAML dictionary of key names and locations.  For example, switching the `Y` and `Z` keys can be done  as:
+
+	Z: 25
+	Y: 26
+
+This is an experimental feature and may be modified or even eliminated.
+
+
+### Device Profiles
+
+Some mice store one or more profiles, which control aspects of the behavior of the device.
+
+Profiles can control the rate at which the mouse reports movement, the resolution of the the movement reports, what the mouse buttons do, and its LED effects.  Solaar can dump the entire set of profiles into a YAML file can load an entire set of profiles from a file.  Users can edit the file to effect changes to the profiles.  Solaar has a setting that switches between profiles or disables all profiles.  When switching between profiles or using a button to change resolution Solaar keeps track of the changes in the settings for these features.
+
+When profiles are active changes cannot be made to the Report Rate setting.   Changes can be made to the Sensitivity setting and to LED settings.  To keep the profile values make these setting ignored.
+
+A profile file has some bookkeeping information, including profile version and the name of the device, and a sequence of profiles.
+
+Each profile has the following fields:
+- enabled: Whether the profile is enabled.
+- sector: Where the profile is stored in device memory.  Sectors greater than 0xFF are in ROM and cannot be written (use the low byte as the sector to write to Flash).
+- name: A memonic name for the profile.
+- report_rate: A report rate in milliseconds from 1 to 8.
+- resolutions: A sequence of five sensor resolutions in DPI.
+- resolution_default_index: The index of the default sensor resolution (0 to 4).
+- resolution_shift_index: The index of the sensor resolution used when the DPI Shift button is pressed (0 to 4).
+- buttons: The action for each button on the mouse in normal mode.
+- gbuttons: The action for each button on the mouse in G-Shift mode.
+- angle_snap: Enable angle snapping for devices.
+- red, blue, green: Color indicator for the profile.
+- lighting: Lighting information for logo and side LEDs in normal mode, then for power saving mode.
+- ps_timeout: Delay in ms to go into power saving mode.
+- po_timeout: Delay in ms to go from power saving mode to fully off.
+- power_mode: Unknown purpose.
+- write count: Unknown purpose.
+Missing or unused parts of a profile are often a sequence of 0xFF bytes.
+
+Button actions can either perform a function (behavior: 9) or send a button click or key press (behaviour: 8).
+Functions are:
+- 0: No Action - do nothing
+- 1: Tilt Left
+- 2: Tilt Right
+- 3: Next DPI - change device resolution to the next DPI
+- 4: Previous DPI - change device resolution to the previous DPI
+- 5: Cycle DPI - change device resolution to the next DPI considered as a cycle
+- 6: Default_DPI - change device resolution to the default resolution
+- 7: Shift_DPI - change device resolution to the shift resolution
+- 8: Next Profile - change to the next enabled profile
+- 9: Previous Profile - change to the previous enabled profile
+- 10: Cycle Profile - change to the next enabled profile considered as a cycle
+- 11: G-Shift - change all buttons to their G-Shift state
+- 12: Battery Status - show battery status on the device LEDs
+- 13: Profile Select - select the n'th enabled profile
+- 14: Mode Switch
+- 15: Host Button - switch between hosts (unverified)
+- 16: Scroll Down
+- 17: Scroll Up
+Some devices might not be able to perform all functions.
+
+Buttons can send (type):
+- 0: Don't send anything.
+- 1: A button click (value) as a 16-bit bitmap, i.e., 1 is left click, 2 is right, 4 is middle, etc.
+- 2: An 8-bit USB HID keycode (value) plus an 8-bit modifier bitmap (modifiers), i.e., 0 for no modifiers, 1 for control, 2 for shift, etc.
+- 3: A 16-bit HID Consumer keycode (value).
+
+See USB_HID_KEYCODES and HID_CONSUMERCODES in lib/logitech_receiver/special_keys.py for values to use for keycodes.
+
+Buttons can also execute macros but Solaar does not provide any support for macros.
+
+Lighting information is a sequence of lighting effects, with the first for the logo LEDs and the second for the side LEDs.
+
+The fields possible in an effect are:
+- ID: The kind of effect:
+- color: A color parameter for the effect as a 24-bit RGB value.
+- intensity: How intense to make the color (1%-100%), 0 for the default (usually 100%).
+- speed: How fast to pulse in ms (one byte).
+- ramp: How to change to the color (0=default, 1=ramp up/down, 2=no ramping).
+- period: How fast to perform the effect in ms (two bytes).
+- form: The form of the breathe effect.
+- bytes: The raw bytes of other effects.
+
+The possible effects and the fields the use are:
+- 0x0: Disable - No fields.
+- 0x1: Fixed color - color, whether to ramp.
+- 0x2: Pulse a color - color, speed.
+- 0x3 Cycle through the spectrum - period, intensity, form.
+- 0x8; A boot effect - No fields.
+- 0x9: A demo effect - NO fields.
+- 0xa: breathe a color (like pulse) - color, period.
+- 0xb: Ripple - color, period.
+- null: An unknown effect.
+Only effects supported by the device can be used.
+
+To set up profiles, first run `solaar profiles <device name>`, which will output a YAML dump of the profiles on the device. Then store the YAML dump into a file and edit the file to make changes. Finally run `solaar profiles <device name> <file name>` to load the profiles back onto the device. Profiles are stored in flash memory and persist when the device is inactive or turned off. When loading profiles Solaar is careful to only write the flash memory sectors that need to be changed. Solaar also checks for correct profile version and device name before loading a profile into a device.
+
+Keep a copy of the initial dump of profiles so that it can be loaded back to the device if problems are encountered with the edited profiles. The safest changes are to take an unused or unenabled profile sector and create a new profile in it, likely mostly copying parts of another profile.
+
+
 ## System Tray
 
 Solaar's GUI normally uses an icon in the system tray.
@@ -182,7 +283,7 @@ This allows users to close Solaar and reopen from the tray.
 This aspect of Solaar depends on having an active system tray which may
 require some special setup when using Gnome, particularly under Wayland.
 
-If you are running gnome, you most likely need the
+If you are running Gnome, you most likely need the
 `gnome-shell-extension-appindicator` package installed.
 In Fedora, this can be done by running
 ```
@@ -199,7 +300,7 @@ You may have to log out and log in again before the system tray shows up.
 
 For many devices, Solaar shows the approximate battery level via icons that
 show up in both the main window and the system tray. In previous versions
-several heuristics to determine which icon names to use for this purpose,
+several heuristics determined which icon names to use for this purpose,
 but as more and more battery icon schemes have been developed this has
 become impossible to do well. Solaar now uses the eleven standard
 battery icon names `battery-{full,good,low,critical,empty}[-charging]` and

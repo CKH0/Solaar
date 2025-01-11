@@ -1,6 +1,5 @@
-# -*- python-mode -*-
-
 ## Copyright (C) 2012-2013  Daniel Pavel
+## Copyright (C) 2014-2024  Solaar Contributors https://pwr-solaar.github.io/Solaar/
 ##
 ## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -16,37 +15,22 @@
 ## with this program; if not, write to the Free Software Foundation, Inc.,
 ## 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-import threading as _threading
+import logging
+import queue
+import threading
 
-from logging import DEBUG as _DEBUG
-from logging import INFO as _INFO
-from logging import getLogger
+from . import base
+from . import exceptions
 
-from . import base as _base
-
-# from time import time as _timestamp
-
-# for both Python 2 and 3
-try:
-    from Queue import Queue as _Queue
-except ImportError:
-    from queue import Queue as _Queue
-
-_log = getLogger(__name__)
-del getLogger
-
-#
-#
-#
+logger = logging.getLogger(__name__)
 
 
 class _ThreadedHandle:
     """A thread-local wrapper with different open handles for each thread.
-
     Closing a ThreadedHandle will close all handles.
     """
 
-    __slots__ = ('path', '_local', '_handles', '_listener')
+    __slots__ = ("path", "_local", "_handles", "_listener")
 
     def __init__(self, listener, path, handle):
         assert listener is not None
@@ -56,18 +40,18 @@ class _ThreadedHandle:
 
         self._listener = listener
         self.path = path
-        self._local = _threading.local()
+        self._local = threading.local()
         # take over the current handle for the thread doing the replacement
         self._local.handle = handle
         self._handles = [handle]
 
     def _open(self):
-        handle = _base.open_path(self.path)
+        handle = base.open_path(self.path)
         if handle is None:
-            _log.error('%r failed to open new handle', self)
+            logger.error("%r failed to open new handle", self)
         else:
-            # if _log.isEnabledFor(_DEBUG):
-            #     _log.debug("%r opened new handle %d", self, handle)
+            # if logger.isEnabledFor(logging.DEBUG):
+            #     logger.debug("%r opened new handle %d", self, handle)
             self._local.handle = handle
             self._handles.append(handle)
             return handle
@@ -76,16 +60,16 @@ class _ThreadedHandle:
         if self._local:
             self._local = None
             handles, self._handles = self._handles, []
-            if _log.isEnabledFor(_DEBUG):
-                _log.debug('%r closing %s', self, handles)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("%r closing %s", self, handles)
             for h in handles:
-                _base.close(h)
+                base.close(h)
 
     @property
     def notifications_hook(self):
         if self._listener:
-            assert isinstance(self._listener, _threading.Thread)
-            if _threading.current_thread() == self._listener:
+            assert isinstance(self._listener, threading.Thread)
+            if threading.current_thread() == self._listener:
                 return self._listener._notifications_hook
 
     def __del__(self):
@@ -108,7 +92,7 @@ class _ThreadedHandle:
             return str(int(self))
 
     def __repr__(self):
-        return '<_ThreadedHandle(%s)>' % self.path
+        return f"<_ThreadedHandle({self.path})>"
 
     def __bool__(self):
         return bool(self._local)
@@ -116,89 +100,59 @@ class _ThreadedHandle:
     __nonzero__ = __bool__
 
 
-#
-#
-#
-
-# How long to wait during a read for the next packet, in seconds
-# Ideally this should be rather long (10s ?), but the read is blocking
-# and this means that when the thread is signalled to stop, it would take
-# a while for it to acknowledge it.
-# Forcibly closing the file handle on another thread does _not_ interrupt the
-# read on Linux systems.
-_EVENT_READ_TIMEOUT = 1.  # in seconds
-
-# After this many reads that did not produce a packet, call the tick() method.
-# This only happens if tick_period is enabled (>0) for the Listener instance.
-# _IDLE_READS = 1 + int(5 // _EVENT_READ_TIMEOUT)  # wait at least 5 seconds between ticks
+# How long to wait during a read for the next packet, in seconds.
+# Ideally this should be rather long (10s ?), but the read is blocking and this means that when the thread
+# is signalled to stop, it would take a while for it to acknowledge it.
+# Forcibly closing the file handle on another thread does _not_ interrupt the read on Linux systems.
+_EVENT_READ_TIMEOUT = 1.0  # in seconds
 
 
-class EventsListener(_threading.Thread):
+class EventsListener(threading.Thread):
     """Listener thread for notifications from the Unifying Receiver.
-
     Incoming packets will be passed to the callback function in sequence.
     """
-    def __init__(self, receiver, notifications_callback):
-        super().__init__(name=self.__class__.__name__ + ':' + receiver.path.split('/')[2])
 
+    def __init__(self, receiver, notifications_callback):
+        try:
+            path_name = receiver.path.split("/")[2]
+        except IndexError:
+            path_name = receiver.path
+        super().__init__(name=self.__class__.__name__ + ":" + path_name)
         self.daemon = True
         self._active = False
-
         self.receiver = receiver
-        self._queued_notifications = _Queue(16)
+        self._queued_notifications = queue.Queue(16)
         self._notifications_callback = notifications_callback
-
-        # self.tick_period = 0
 
     def run(self):
         self._active = True
-
         # replace the handle with a threaded one
         self.receiver.handle = _ThreadedHandle(self, self.receiver.path, self.receiver.handle)
-        # get the right low-level handle for this thread
-        ihandle = int(self.receiver.handle)
-        if _log.isEnabledFor(_INFO):
-            _log.info('started with %s (%d)', self.receiver, ihandle)
-
+        if logger.isEnabledFor(logging.INFO):
+            logger.info("started with %s (%d)", self.receiver, int(self.receiver.handle))
         self.has_started()
 
-        # last_tick = 0
-        # the first idle read -- delay it a bit, and make sure to stagger
-        # idle reads for multiple receivers
-        # idle_reads = _IDLE_READS + (ihandle % 5) * 2
+        if self.receiver.isDevice:  # ping (wired or BT) devices to see if they are really online
+            if self.receiver.ping():
+                self.receiver.changed(active=True, reason="initialization")
 
         while self._active:
             if self._queued_notifications.empty():
                 try:
-                    # _log.debug("read next notification")
-                    n = _base.read(self.receiver.handle, _EVENT_READ_TIMEOUT)
-                except _base.NoReceiver:
-                    _log.warning('%s disconnected', self.receiver.name)
+                    n = base.read(self.receiver.handle, _EVENT_READ_TIMEOUT)
+                except exceptions.NoReceiver:
+                    logger.warning("%s disconnected", self.receiver.name)
                     self.receiver.close()
                     break
-
                 if n:
-                    n = _base.make_notification(*n)
+                    n = base.make_notification(*n)
             else:
-                # deliver any queued notifications
-                n = self._queued_notifications.get()
-
+                n = self._queued_notifications.get()  # deliver any queued notifications
             if n:
-                # if _log.isEnabledFor(_DEBUG):
-                #     _log.debug("%s: processing %s", self.receiver, n)
                 try:
                     self._notifications_callback(n)
                 except Exception:
-                    _log.exception('processing %s', n)
-
-            # elif self.tick_period:
-            #     idle_reads -= 1
-            #     if idle_reads <= 0:
-            #         idle_reads = _IDLE_READS
-            #         now = _timestamp()
-            #         if now - last_tick >= self.tick_period:
-            #             last_tick = now
-            #             self.tick(now)
+                    logger.exception("processing %s", n)
 
         del self._queued_notifications
         self.has_stopped()
@@ -216,17 +170,13 @@ class EventsListener(_threading.Thread):
         """Called right before the thread stops."""
         pass
 
-    # def tick(self, timestamp):
-    #     """Called about every tick_period seconds."""
-    #     pass
-
     def _notifications_hook(self, n):
         # Only consider unhandled notifications that were sent from this thread,
         # i.e. triggered by a callback handling a previous notification.
-        assert _threading.current_thread() == self
-        if self._active:  # and _threading.current_thread() == self:
-            # if _log.isEnabledFor(_DEBUG):
-            #     _log.debug("queueing unhandled %s", n)
+        assert threading.current_thread() == self
+        if self._active:  # and threading.current_thread() == self:
+            # if logger.isEnabledFor(logging.DEBUG):
+            #     logger.debug("queueing unhandled %s", n)
             if not self._queued_notifications.full():
                 self._queued_notifications.put(n)
 
